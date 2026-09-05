@@ -1,0 +1,480 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, SafeAreaView, FlatList, Modal, Image, Platform } from 'react-native';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import Colors from '../constants/Colors';
+import { getProducts, getSettings, saveBill } from '../store/storage';
+import { useIsFocused } from '@react-navigation/native';
+
+export default function BillingScreen() {
+  const [products, setProducts] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [cart, setCart] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [showCartDetails, setShowCartDetails] = useState(false);
+  const [editingQtyProduct, setEditingQtyProduct] = useState(null);
+  const [tempQty, setTempQty] = useState('');
+
+  const openQtyModal = (productId, currentQty) => {
+    setEditingQtyProduct(productId);
+    setTempQty(String(currentQty));
+  };
+
+  const saveCustomQty = () => {
+    const qty = parseInt(tempQty, 10);
+    if (!isNaN(qty) && qty > 0) {
+      setCart(cart.map(item => item.id === editingQtyProduct ? { ...item, qty: qty } : item));
+    } else if (qty === 0) {
+      setCart(cart.filter(item => item.id !== editingQtyProduct));
+    }
+    setEditingQtyProduct(null);
+    setTempQty('');
+  };
+
+
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
+
+  const loadData = async () => {
+    setProducts(await getProducts());
+    setSettings(await getSettings());
+  };
+
+  // Extract unique categories from products
+  const categories = ['All', ...new Set(products.map(p => p.category).filter(Boolean))];
+
+  const addToCart = (product) => {
+    const existingItem = cart.find(item => item.id === product.id);
+    const step = product.stepQty || 1;
+    if (existingItem) {
+      setCart(cart.map(item => item.id === product.id ? { ...item, qty: item.qty + step } : item));
+    } else {
+      setCart([...cart, { ...product, qty: step }]);
+    }
+  };
+
+  const removeFromCart = (productId) => {
+    const existingItem = cart.find(item => item.id === productId);
+    const step = existingItem.stepQty || 1;
+    if (existingItem.qty > step) {
+      setCart(cart.map(item => item.id === productId ? { ...item, qty: item.qty - step } : item));
+    } else {
+      setCart(cart.filter(item => item.id !== productId));
+    }
+  };
+
+  const totalItems = cart.reduce((sum, item) => sum + (item.unit === 'gram' ? 1 : item.qty), 0);
+  const totalPrice = cart.reduce((sum, item) => {
+    const itemTotal = item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty;
+    return sum + itemTotal;
+  }, 0);
+
+  const getCartQty = (productId) => {
+    const item = cart.find(item => item.id === productId);
+    return item ? item.qty : 0;
+  };
+
+  // Filter products by search query AND selected category
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const handlePrint = async () => {
+    const bill = {
+      id: `TSB-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+      items: cart,
+      total: totalPrice,
+      paymentMethod
+    };
+    await saveBill(bill);
+
+    // Print to terminal console
+    console.log('\n================================');
+    console.log(`        ${settings?.shopName || 'ROYAL TEA STALL'}`);
+    if (settings?.address) console.log(`        ${settings.address}`);
+    if (settings?.phone) console.log(`        Ph: ${settings.phone}`);
+    console.log('================================');
+    console.log(`Bill No: ${bill.id}`);
+    console.log(`Date: ${bill.date}  Time: ${bill.time}`);
+    console.log('--------------------------------');
+    console.log('Item            Qty   Rate   Total');
+    console.log('--------------------------------');
+    bill.items.forEach(item => {
+      const name = item.name.padEnd(15).substring(0, 15);
+      const qtyStr = item.unit === 'gram' ? `${item.qty}g` : String(item.qty);
+      const qty = qtyStr.padEnd(5);
+      const price = String(item.price).padEnd(6);
+      const itemTotal = item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty;
+      const total = String(itemTotal.toFixed(2));
+      console.log(`${name} ${qty} ${price} ${total}`);
+    });
+    console.log('--------------------------------');
+    console.log(`Total Items: ${bill.items.length}   Total Qty: ${totalItems}`);
+    console.log('================================');
+    console.log(`GRAND TOTAL:           Rs. ${bill.total.toFixed(2)}`);
+    console.log('================================\n');
+
+    setCart([]);
+    setShowReceiptPreview(false);
+    alert('Bill saved and receipt printed to console!');
+  };
+
+  const renderProductCard = ({ item }) => {
+    const qty = getCartQty(item.id);
+
+    return (
+      <View style={styles.productCard}>
+        <View style={styles.priceTag}>
+          <Text style={styles.priceTagText}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''}</Text>
+        </View>
+
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.productImage} />
+        ) : (
+          <MaterialIcons name="local-cafe" size={40} color={Colors.primary} style={{ alignSelf: 'center', marginVertical: 10 }} />
+        )}
+
+        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.productCategory} numberOfLines={1}>{item.category}</Text>
+
+        {qty === 0 ? (
+          <TouchableOpacity style={styles.addButton} onPress={() => addToCart(item)}>
+            <Text style={styles.addButtonText}>+ ADD</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.stepperContainer}>
+            <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>-</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => openQtyModal(item.id, qty)}>
+              <Text style={styles.stepperValue}>{qty}{item.unit === 'gram' ? 'g' : ' in cart'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => addToCart(item)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>+</Text></TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <FontAwesome5 name="coffee" size={20} color="#fff" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.shopName}>{settings?.shopName || 'ROYAL TEA STALL'}</Text>
+            <Text style={styles.dateText}>{new Date().toDateString()}</Text>
+          </View>
+          <View style={styles.printerBadge}>
+            <FontAwesome5 name="print" size={12} color="#fff" style={{ marginRight: 5 }} />
+            <Text style={{ color: '#fff', fontSize: 12 }}>No Printer</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.searchContainer}>
+        <FontAwesome5 name="search" size={16} color={Colors.textLight} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search chai, samosa, coffee..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      <View style={styles.filtersWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContainer}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category}
+              style={[styles.filterChip, selectedCategory === category && styles.filterChipActive]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={selectedCategory === category ? styles.filterChipTextActive : styles.filterChipText}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={item => item.id}
+        renderItem={renderProductCard}
+        numColumns={2}
+        contentContainerStyle={styles.gridContainer}
+      />
+
+      {totalItems > 0 && (
+        <View style={styles.bottomSheet}>
+          {showCartDetails && (
+            <View style={styles.cartDetailsContainer}>
+              <View style={styles.cartDetailsHeader}>
+                <Text style={styles.cartDetailsTitle}>Current Bill Items ({cart.length})</Text>
+                <TouchableOpacity onPress={() => setCart([])} style={styles.clearAllBtn}>
+                  <FontAwesome5 name="trash" size={12} color={Colors.dangerText} style={{ marginRight: 5 }} />
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.cartItemsList} showsVerticalScrollIndicator={false}>
+                {cart.map(item => (
+                  <View key={item.id} style={styles.cartItemRow}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'flex-start' }}>
+                      <Text style={[styles.cartItemName, { flex: 1 }]} numberOfLines={2}>{item.name}</Text>
+                      <TouchableOpacity onPress={() => setCart(cart.filter(i => i.id !== item.id))} style={styles.cartItemDelete}>
+                        <FontAwesome5 name="trash-alt" size={14} color={Colors.dangerText} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.cartItemPriceCalc, { flex: 1 }]}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''} x {item.unit === 'gram' ? item.qty / (item.stepQty || 50) : item.qty}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.cartItemBtn}>
+                            <Text style={styles.cartItemBtnText}>-</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => openQtyModal(item.id, item.qty)}>
+                            <Text style={styles.cartItemQty}>{item.qty}{item.unit === 'gram' ? 'g' : ''}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => addToCart(item)} style={[styles.cartItemBtn, { backgroundColor: Colors.primary }]}>
+                            <Text style={[styles.cartItemBtnText, { color: '#fff' }]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.cartItemTotal}>₹{(item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty).toFixed(2)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Payment:</Text>
+            <View style={styles.paymentOptions}>
+              {['Cash', 'UPI', 'Card'].map(method => (
+                <TouchableOpacity key={method} style={[styles.paymentBtn, paymentMethod === method && styles.paymentBtnActive]} onPress={() => setPaymentMethod(method)}>
+                  <Text style={[styles.paymentBtnText, paymentMethod === method && styles.paymentBtnTextActive]}>{method}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.cartRow}>
+            <TouchableOpacity onPress={() => setShowCartDetails(!showCartDetails)} style={{ paddingVertical: 5 }}>
+              <Text style={styles.cartItemsText}>
+                <FontAwesome5 name="shopping-cart" color={Colors.primary} size={14} /> {totalItems} Items <FontAwesome5 name={showCartDetails ? "caret-up" : "caret-down"} color={Colors.primary} size={14} />
+              </Text>
+              <Text style={styles.cartTotal}>₹{totalPrice.toFixed(2)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.printBillBtn} onPress={() => setShowReceiptPreview(true)}>
+              <FontAwesome5 name="print" size={16} color="#fff" style={{ marginRight: 10 }} />
+              <Text style={styles.printBillText}>PRINT BILL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Custom Quantity Modal */}
+      <Modal visible={editingQtyProduct !== null} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { padding: 20, width: '80%', alignItems: 'center' }]}>
+            <Text style={styles.modalTitle}>Enter Quantity</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: Colors.border, width: '100%', padding: 10, borderRadius: 8, marginVertical: 15, fontSize: 18, textAlign: 'center' }}
+              keyboardType="numeric"
+              value={tempQty}
+              onChangeText={setTempQty}
+              autoFocus
+              selectTextOnFocus
+            />
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingQtyProduct(null)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmPrintBtn, { flex: 1 }]} onPress={saveCustomQty}>
+                <Text style={styles.confirmPrintText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Thermal Receipt Preview Modal */}
+      <Modal visible={showReceiptPreview} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <FontAwesome5 name="receipt" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                <Text style={styles.modalTitle}>Thermal Receipt Preview</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowReceiptPreview(false)}>
+                <FontAwesome5 name="times" size={20} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningText}>No Printer Connected (Will print to Virtual Console) ⚠️</Text>
+            </View>
+
+            <ScrollView style={styles.receiptPaper} showsVerticalScrollIndicator={false}>
+              <View style={styles.receiptHeader}>
+                <Text style={styles.receiptShopName}>{settings?.shopName || 'ROYAL TEA STALL'}</Text>
+                {settings?.address ? <Text style={styles.receiptCenterText}>{settings.address}</Text> : null}
+                {settings?.phone ? <Text style={styles.receiptCenterText}>Ph: {settings.phone}</Text> : null}
+              </View>
+
+              <View style={styles.receiptDivider} />
+
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptText}>Bill No:</Text>
+                <Text style={styles.receiptTextBold}>TSB-{Math.floor(1000 + Math.random() * 9000)}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptText}>Date: {new Date().toLocaleDateString()}</Text>
+                <Text style={styles.receiptText}>Time: {new Date().toLocaleTimeString()}</Text>
+              </View>
+
+              <View style={styles.receiptDivider} />
+
+              <View style={styles.receiptRow}>
+                <Text style={[styles.receiptTextBold, { flex: 2 }]}>Item</Text>
+                <Text style={[styles.receiptTextBold, { flex: 1, textAlign: 'center' }]}>Qty</Text>
+                <Text style={[styles.receiptTextBold, { flex: 1, textAlign: 'right' }]}>Rate</Text>
+                <Text style={[styles.receiptTextBold, { flex: 1, textAlign: 'right' }]}>Total</Text>
+              </View>
+
+              <View style={styles.receiptDivider} />
+
+              {cart.map(item => (
+                <View key={item.id} style={[styles.receiptRow, { marginBottom: 6 }]}>
+                  <Text style={[styles.receiptText, { flex: 2 }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.receiptText, { flex: 1, textAlign: 'center' }]}>{item.unit === 'gram' ? `${item.qty}g` : item.qty}</Text>
+                  <Text style={[styles.receiptText, { flex: 1, textAlign: 'right' }]}>{item.price}</Text>
+                  <Text style={[styles.receiptText, { flex: 1, textAlign: 'right' }]}>{(item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty).toFixed(2)}</Text>
+                </View>
+              ))}
+
+              <View style={styles.receiptDivider} />
+
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptText}>Items: {cart.length}</Text>
+                <Text style={styles.receiptText}>Qty: {totalItems}</Text>
+              </View>
+
+              <View style={styles.receiptDivider} />
+
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptTotalLabel}>GRAND TOTAL:</Text>
+                <Text style={styles.receiptTotalValue}>₹ {totalPrice.toFixed(2)}</Text>
+              </View>
+              <View style={styles.receiptDivider} />
+              <Text style={[styles.receiptCenterText, { marginTop: 5, fontSize: 12 }]}>Thank you for your visit!</Text>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowReceiptPreview(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmPrintBtn} onPress={handlePrint}>
+                <FontAwesome5 name="print" size={16} color="#fff" style={{ marginRight: 10 }} />
+                <Text style={styles.confirmPrintText}>PRINT RECEIPT</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: { backgroundColor: Colors.primary, padding: 15, paddingTop: 40 },
+  headerTop: { flexDirection: 'row', alignItems: 'center' },
+  shopName: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  dateText: { color: '#fff', fontSize: 12, opacity: 0.8 },
+  printerBadge: { backgroundColor: 'rgba(0,0,0,0.2)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 15, paddingHorizontal: 15, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, height: 50 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 16 },
+  filtersWrapper: { paddingLeft: 15, marginBottom: 15 },
+  filtersContainer: { paddingRight: 15, alignItems: 'center' },
+  filterChip: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, marginRight: 10, backgroundColor: '#fff' },
+  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterChipText: { color: Colors.text, fontSize: 14 },
+  filterChipTextActive: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  gridContainer: { paddingHorizontal: 10, paddingBottom: 150 },
+  productCard: { flex: 1, backgroundColor: Colors.primaryLight, margin: 5, borderRadius: 12, padding: 12, position: 'relative' },
+  priceTag: { position: 'absolute', top: 10, right: 10, backgroundColor: Colors.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, zIndex: 1 },
+  priceTagText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  productImage: { width: 50, height: 50, borderRadius: 25, alignSelf: 'center', marginVertical: 10 },
+  productName: { fontSize: 14, fontWeight: 'bold', color: Colors.text, textAlign: 'center', marginBottom: 2 },
+  productCategory: { fontSize: 10, color: Colors.textLight, textAlign: 'center', marginBottom: 10 },
+  addButton: { backgroundColor: Colors.primary, padding: 10, borderRadius: 8, alignItems: 'center' },
+  addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  stepperContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: Colors.primary, borderRadius: 8, padding: 5 },
+  stepperBtn: { paddingHorizontal: 10 },
+  stepperBtnText: { color: Colors.primary, fontSize: 18, fontWeight: 'bold' },
+  stepperValue: { color: Colors.primary, fontWeight: 'bold' },
+  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.primaryLight, padding: 15, borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 5 },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  paymentLabel: { fontSize: 14, fontWeight: 'bold', color: Colors.text, marginRight: 15 },
+  paymentOptions: { flexDirection: 'row', flex: 1, gap: 10 },
+  paymentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border },
+  paymentBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  paymentBtnText: { fontSize: 14, color: Colors.textLight },
+  paymentBtnTextActive: { color: '#fff', fontWeight: 'bold' },
+  cartDetailsContainer: { marginBottom: 15, maxHeight: 400 },
+  cartDetailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cartDetailsTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  clearAllBtn: { flexDirection: 'row', alignItems: 'center' },
+  clearAllText: { color: Colors.dangerText, fontWeight: 'bold', fontSize: 14 },
+  cartItemsList: {},
+  cartItemRow: { backgroundColor: '#fff', padding: 12, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
+  cartItemInfo: { flex: 1, paddingRight: 10 },
+  cartItemName: { fontSize: 14, color: Colors.text, marginBottom: 4 },
+  cartItemPriceCalc: { fontSize: 12, color: Colors.textLight },
+  cartItemActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cartItemBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
+  cartItemBtnText: { color: Colors.primary, fontSize: 14, fontWeight: 'bold' },
+  cartItemQty: { fontSize: 14, fontWeight: 'bold', color: Colors.text, minWidth: 15, textAlign: 'center' },
+  cartItemTotal: { fontSize: 14, fontWeight: 'bold', color: Colors.primary, minWidth: 35, textAlign: 'right' },
+  cartItemDelete: { padding: 4 },
+  cartRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cartItemsText: { fontSize: 14, color: Colors.text },
+  cartTotal: { fontSize: 28, fontWeight: 'bold', color: Colors.primary },
+  printBillBtn: { backgroundColor: Colors.primary, flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 15, borderRadius: 8, alignItems: 'center' },
+  printBillText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  warningBanner: { backgroundColor: Colors.primaryLight, padding: 10 },
+  warningText: { color: Colors.primary, fontSize: 12, textAlign: 'center' },
+  receiptPaper: { backgroundColor: '#fff', margin: 15, padding: 15, borderRadius: 0, maxHeight: 400, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  receiptHeader: { alignItems: 'center', marginBottom: 10 },
+  receiptShopName: { fontFamily: 'monospace', fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 4, textAlign: 'center' },
+  receiptCenterText: { fontFamily: 'monospace', fontSize: 12, color: '#333', textAlign: 'center', marginBottom: 2 },
+  receiptDivider: { height: 1, width: '100%', borderBottomWidth: 1, borderColor: '#000', borderStyle: 'dashed', marginVertical: 8 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  receiptText: { fontFamily: 'monospace', fontSize: 12, color: '#000' },
+  receiptTextBold: { fontFamily: 'monospace', fontSize: 12, color: '#000', fontWeight: 'bold' },
+  receiptTotalLabel: { fontFamily: 'monospace', fontSize: 16, fontWeight: 'bold', color: '#000' },
+  receiptTotalValue: { fontFamily: 'monospace', fontSize: 18, fontWeight: 'bold', color: '#000' },
+  modalActions: { flexDirection: 'row', padding: 15, borderTopWidth: 1, borderTopColor: Colors.border, gap: 10 },
+  cancelBtn: { flex: 1, padding: 15, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: 'center' },
+  cancelBtnText: { color: Colors.primary, fontWeight: 'bold' },
+  confirmPrintBtn: { flex: 2, backgroundColor: Colors.primary, flexDirection: 'row', padding: 15, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  confirmPrintText: { color: '#fff', fontWeight: 'bold' }
+});
