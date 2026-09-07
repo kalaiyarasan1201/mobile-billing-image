@@ -227,30 +227,28 @@ export default function BillingScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.cartItemsList} showsVerticalScrollIndicator={false}>
-                {cart.map(item => (
-                  <View key={item.id} style={styles.cartItemRow}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'flex-start' }}>
-                      <Text style={[styles.cartItemName, { flex: 1 }]} numberOfLines={2}>{item.name}</Text>
-                      <TouchableOpacity onPress={() => setCart(cart.filter(i => i.id !== item.id))} style={styles.cartItemDelete}>
-                        <FontAwesome5 name="trash-alt" size={14} color={Colors.dangerText} />
-                      </TouchableOpacity>
+                {cart.map((item, index) => (
+                  <View key={item.id} style={[styles.cartItemRow, index % 2 === 1 ? { backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' } : { backgroundColor: '#FFFFFF', borderColor: '#F0F0F0' }]}>
+                    <View style={{ flex: 1, paddingRight: 10, justifyContent: 'center' }}>
+                      <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.cartItemPriceCalc}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''} x {item.unit === 'gram' ? item.qty / (item.stepQty || 50) : item.qty}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={[styles.cartItemPriceCalc, { flex: 1 }]}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''} x {item.unit === 'gram' ? item.qty / (item.stepQty || 50) : item.qty}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.cartItemBtn}>
-                            <Text style={styles.cartItemBtnText}>-</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => openQtyModal(item.id, item.qty)}>
-                            <Text style={styles.cartItemQty}>{item.qty}{item.unit === 'gram' ? 'g' : ''}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => addToCart(item)} style={[styles.cartItemBtn, { backgroundColor: Colors.primary }]}>
-                            <Text style={[styles.cartItemBtnText, { color: '#fff' }]}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.cartItemTotal}>₹{(item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty).toFixed(2)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.cartItemBtn}>
+                          <Text style={styles.cartItemBtnText}>-</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => openQtyModal(item.id, item.qty)}>
+                          <Text style={styles.cartItemQty}>{item.qty}{item.unit === 'gram' ? 'g' : ''}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => addToCart(item)} style={[styles.cartItemBtn, { backgroundColor: Colors.primary }]}>
+                          <Text style={[styles.cartItemBtnText, { color: '#fff' }]}>+</Text>
+                        </TouchableOpacity>
                       </View>
+                      <Text style={styles.cartItemTotal}>₹{(item.unit === 'gram' ? (item.price / (item.stepQty || 50)) * item.qty : item.price * item.qty).toFixed(0)}</Text>
+                      <TouchableOpacity onPress={() => setCart(cart.filter(i => i.id !== item.id))} style={styles.cartItemDelete}>
+                        <FontAwesome5 name="trash-alt" size={16} color={Colors.dangerText} />
+                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -271,7 +269,7 @@ export default function BillingScreen() {
 
           <View style={styles.cartRow}>
             <TouchableOpacity onPress={() => setShowCartDetails(!showCartDetails)} style={{ paddingVertical: 5 }}>
-              <Text style={styles.cartItemsText}>
+              <Text style={[styles.cartItemsText, { color: Colors.primary, fontWeight: 'bold' }]}>
                 <FontAwesome5 name="shopping-cart" color={Colors.primary} size={14} /> {totalItems} Items <FontAwesome5 name={showCartDetails ? "caret-up" : "caret-down"} color={Colors.primary} size={14} />
               </Text>
               <Text style={styles.cartTotal}>₹{totalPrice.toFixed(2)}</Text>
@@ -428,20 +426,20 @@ const styles = StyleSheet.create({
   stepperBtnText: { color: Colors.primary, fontSize: 18, fontWeight: 'bold' },
   stepperValue: { color: Colors.primary, fontWeight: 'bold' },
   bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.primaryLight, padding: 15, borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 5 },
-  paymentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 16, elevation: 4, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, borderWidth: 1, borderColor: '#FFE0CC' },
   paymentLabel: { fontSize: 14, fontWeight: 'bold', color: Colors.text, marginRight: 15 },
   paymentOptions: { flexDirection: 'row', flex: 1, gap: 10 },
   paymentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border },
   paymentBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   paymentBtnText: { fontSize: 14, color: Colors.textLight },
   paymentBtnTextActive: { color: '#fff', fontWeight: 'bold' },
-  cartDetailsContainer: { marginBottom: 15, maxHeight: 400 },
-  cartDetailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cartDetailsContainer: { marginBottom: 15, maxHeight: 400, backgroundColor: '#FFFFFF', padding: 15, borderRadius: 16, elevation: 8, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, borderWidth: 1, borderColor: '#FFE0CC' },
+  cartDetailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   cartDetailsTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
-  clearAllBtn: { flexDirection: 'row', alignItems: 'center' },
-  clearAllText: { color: Colors.dangerText, fontWeight: 'bold', fontSize: 14 },
+  clearAllBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF0F0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  clearAllText: { color: Colors.dangerText, fontWeight: 'bold', fontSize: 13 },
   cartItemsList: {},
-  cartItemRow: { backgroundColor: '#fff', padding: 12, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
+  cartItemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1 },
   cartItemInfo: { flex: 1, paddingRight: 10 },
   cartItemName: { fontSize: 14, color: Colors.text, marginBottom: 4 },
   cartItemPriceCalc: { fontSize: 12, color: Colors.textLight },
