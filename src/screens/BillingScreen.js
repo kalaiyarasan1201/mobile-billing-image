@@ -135,32 +135,37 @@ export default function BillingScreen() {
 
     return (
       <View style={styles.productCard}>
-        <View style={styles.priceTag}>
-          <Text style={styles.priceTagText}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''}</Text>
+        <View style={styles.imageContainer}>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.productImagePlaceholder}>
+              <MaterialIcons name="local-cafe" size={40} color={Colors.primary} />
+            </View>
+          )}
+          <View style={styles.priceTag}>
+            <Text style={styles.priceTagText}>₹{item.price}{item.unit === 'gram' ? `/${item.stepQty || 50}g` : ''}</Text>
+          </View>
         </View>
 
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.productImage} />
-        ) : (
-          <MaterialIcons name="local-cafe" size={40} color={Colors.primary} style={{ alignSelf: 'center', marginVertical: 10 }} />
-        )}
+        <View style={styles.productInfoContainer}>
+          <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.productCategory} numberOfLines={1}>{item.category}</Text>
 
-        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.productCategory} numberOfLines={1}>{item.category}</Text>
-
-        {qty === 0 ? (
-          <TouchableOpacity style={styles.addButton} onPress={() => addToCart(item)}>
-            <Text style={styles.addButtonText}>+ ADD</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.stepperContainer}>
-            <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>-</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => openQtyModal(item.id, qty)}>
-              <Text style={styles.stepperValue}>{qty}{item.unit === 'gram' ? 'g' : ' in cart'}</Text>
+          {qty === 0 ? (
+            <TouchableOpacity style={styles.addButton} onPress={() => addToCart(item)}>
+              <Text style={styles.addButtonText}>+ ADD</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => addToCart(item)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>+</Text></TouchableOpacity>
-          </View>
-        )}
+          ) : (
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>-</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => openQtyModal(item.id, qty)}>
+                <Text style={styles.stepperValue}>{qty}{item.unit === 'gram' ? 'g' : ''}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => addToCart(item)} style={styles.stepperBtn}><Text style={styles.stepperBtnText}>+</Text></TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
     );
   };
@@ -413,18 +418,56 @@ const styles = StyleSheet.create({
   filterChipText: { color: Colors.text, fontSize: 14 },
   filterChipTextActive: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   gridContainer: { paddingHorizontal: 10, paddingBottom: 150 },
-  productCard: { flex: 1, backgroundColor: Colors.primaryLight, margin: 5, borderRadius: 12, padding: 12, position: 'relative' },
-  priceTag: { position: 'absolute', top: 0, right: 0, backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderTopRightRadius: 12, borderBottomLeftRadius: 12, zIndex: 1 },
-  priceTagText: { color: '#fff', fontSize: 12, fontWeight: 'bold', letterSpacing: 0.5 },
-  productImage: { width: 50, height: 50, borderRadius: 25, alignSelf: 'center', marginVertical: 10 },
-  productName: { fontSize: 14, fontWeight: 'bold', color: Colors.text, textAlign: 'center', marginBottom: 2 },
-  productCategory: { fontSize: 10, color: Colors.textLight, textAlign: 'center', marginBottom: 10 },
-  addButton: { backgroundColor: Colors.primary, padding: 10, borderRadius: 8, alignItems: 'center' },
+  productCard: { 
+    flex: 1, 
+    backgroundColor: '#fff', 
+    margin: 6, 
+    borderRadius: 16, 
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 110,
+    backgroundColor: '#f5f5f5',
+    position: 'relative'
+  },
+  productImage: { 
+    width: '100%', 
+    height: '100%', 
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  priceTag: { 
+    position: 'absolute', 
+    top: 8, 
+    right: 8, 
+    backgroundColor: Colors.primary, 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 8, 
+    zIndex: 1 
+  },
+  priceTagText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  productInfoContainer: {
+    padding: 10,
+  },
+  productName: { fontSize: 15, fontWeight: 'bold', color: Colors.text, marginBottom: 2 },
+  productCategory: { fontSize: 12, color: Colors.textLight, marginBottom: 12 },
+  addButton: { backgroundColor: Colors.primary, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
   addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  stepperContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: Colors.primary, borderRadius: 8, padding: 5 },
+  stepperContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 },
   stepperBtn: { paddingHorizontal: 10 },
-  stepperBtnText: { color: Colors.primary, fontSize: 18, fontWeight: 'bold' },
-  stepperValue: { color: Colors.primary, fontWeight: 'bold' },
+  stepperBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  stepperValue: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.primaryLight, padding: 15, borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 5 },
   paymentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 16, elevation: 4, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, borderWidth: 1, borderColor: '#FFE0CC' },
   paymentLabel: { fontSize: 14, fontWeight: 'bold', color: Colors.text, marginRight: 15 },
