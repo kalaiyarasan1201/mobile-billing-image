@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +10,16 @@ import ProductsScreen from './src/screens/ProductsScreen';
 import PrinterSetupScreen from './src/screens/PrinterSetupScreen';
 import HistorySalesScreen from './src/screens/HistorySalesScreen';
 import Colors from './src/constants/Colors';
+
+if (Platform.OS === 'web') {
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    if (typeof args[0] === 'string' && (args[0].includes('shadow*') || args[0].includes('pointerEvents'))) {
+      return;
+    }
+    originalConsoleError(...args);
+  };
+}
 
 LogBox.ignoreLogs(['props.pointerEvents is deprecated']);
 
